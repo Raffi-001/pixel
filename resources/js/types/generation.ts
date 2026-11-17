@@ -12,6 +12,9 @@ export type Generation = {
     status: GenerationStatus;
     status_label: string;
     is_final: boolean;
+    was_retried: boolean;
+    queue_position: number | null;
+    waiting_reason: string | null;
     prompt: string;
     size: string;
     quality: string;

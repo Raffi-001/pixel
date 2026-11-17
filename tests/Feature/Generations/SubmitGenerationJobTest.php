@@ -107,7 +107,7 @@ it('fails for free when Pixelforge rejects the request', function (string $code,
 })->with([
     'content policy' => ['content_policy_violation', 400, 'content policy'],
     'overloaded' => ['overloaded', 503, 'overloaded'],
-    'daily limit' => ['daily_limit_exceeded', 429, 'daily generation limit'],
+    'daily limit' => ['daily_limit_exceeded', 429, 'daily capacity is used up'],
     'validation' => ['validation_failed', 422, 'Rejected.'],
 ]);
 

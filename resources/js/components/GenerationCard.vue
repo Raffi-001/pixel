@@ -70,7 +70,13 @@ function retry(): void {
                 class="flex flex-col items-center gap-2 text-sm text-muted-foreground"
             >
                 <Spinner class="size-6" />
-                {{ waitingText[generation.status] }}
+                <span>{{ waitingText[generation.status] }}</span>
+                <span
+                    v-if="generation.waiting_reason"
+                    class="text-xs"
+                    data-test="waiting-reason"
+                    >{{ generation.waiting_reason }}</span
+                >
             </div>
         </button>
 
@@ -88,8 +94,15 @@ function retry(): void {
                 class="mt-auto flex items-center justify-between gap-2 text-xs"
             >
                 <GenerationCost :generation="generation" />
+                <span
+                    v-if="
+                        generation.status === 'failed' && generation.was_retried
+                    "
+                    class="text-muted-foreground"
+                    >Retried</span
+                >
                 <Button
-                    v-if="generation.status === 'failed'"
+                    v-else-if="generation.status === 'failed'"
                     size="sm"
                     variant="outline"
                     class="h-7"

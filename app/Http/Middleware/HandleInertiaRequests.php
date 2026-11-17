@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Models\User;
 use App\Services\AppSettings;
 use App\Services\Money;
+use App\Services\PixelforgeCapacity;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,9 @@ final class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'credits' => fn (): ?array => $this->credits($request),
+            'capacity' => fn (): array => [
+                'paused_until' => resolve(PixelforgeCapacity::class)->pausedUntil()?->toIso8601String(),
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

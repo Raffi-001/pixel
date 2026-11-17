@@ -39,6 +39,19 @@ final readonly class PixelforgeClient
     }
 
     /**
+     * One page of the account's generations, newest first.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function listGenerations(?string $cursor = null, int $limit = 100): array
+    {
+        return $this->json($this->send(fn (PendingRequest $request): Response => $request->get('generations', array_filter([
+            'limit' => $limit,
+            'cursor' => $cursor,
+        ]))));
+    }
+
+    /**
      * Pricing changes rarely and needs no API key, so it is cached briefly.
      */
     public function pricing(): PixelforgePricing

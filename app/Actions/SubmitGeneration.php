@@ -8,6 +8,7 @@ use App\Enums\GenerationStatus;
 use App\Exceptions\PixelforgeException;
 use App\Models\Generation;
 use App\Services\Pixelforge\PixelforgeClient;
+use App\Services\PixelforgeCapacity;
 
 /**
  * Sends a waiting generation to Pixelforge. Our generation id doubles as the idempotency key,
@@ -19,6 +20,7 @@ final readonly class SubmitGeneration
         private PixelforgeClient $pixelforge,
         private ApplyPixelforgeGeneration $applyRemote,
         private FailGeneration $failGeneration,
+        private PixelforgeCapacity $capacity,
     ) {}
 
     /**
@@ -41,6 +43,10 @@ final readonly class SubmitGeneration
         } catch (PixelforgeException $pixelforgeException) {
             throw_if($pixelforgeException->isTemporaryLimit() || $pixelforgeException->isConnectionFailure(), $pixelforgeException);
 
+            if ($pixelforgeException->errorCode === 'daily_limit_exceeded') {
+                $this->capacity->pauseUntilNextUtcDay();
+            }
+
             $this->failGeneration->handle($generation, $pixelforgeException->errorCode, $this->describe($pixelforgeException));
 
             return;
@@ -54,7 +60,7 @@ final readonly class SubmitGeneration
         return match ($exception->errorCode) {
             'content_policy_violation' => 'Pixelforge rejected this prompt under its content policy. You were not charged.',
             'overloaded' => 'Pixelforge was overloaded and did not accept the request. You were not charged; please retry.',
-            'daily_limit_exceeded' => 'The daily generation limit has been reached. You were not charged; please try again tomorrow (UTC).',
+            'daily_limit_exceeded' => $this->capacity->pausedMessage(),
             default => $exception->getMessage().' You were not charged.',
         };
     }

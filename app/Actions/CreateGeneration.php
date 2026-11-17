@@ -13,11 +13,14 @@ use App\Models\Generation;
 use App\Models\User;
 use App\Services\AppSettings;
 use App\Services\Money;
+use App\Services\PixelforgeCapacity;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Records a generation, holds its worst-case price from the user's balance and queues it for Pixelforge.
+ * A submission key makes this idempotent: a double-click or resent request returns the first generation
+ * instead of creating (and holding credits for) a second one.
  */
 final readonly class CreateGeneration
 {
@@ -25,6 +28,7 @@ final readonly class CreateGeneration
         private EstimateGenerationCost $estimateCost,
         private RecordCreditTransaction $recordTransaction,
         private AppSettings $settings,
+        private PixelforgeCapacity $capacity,
     ) {}
 
     /**
@@ -39,17 +43,30 @@ final readonly class CreateGeneration
         GenerationQuality $quality,
         array $referenceImages = [],
         ?Generation $retryOf = null,
+        ?string $submissionKey = null,
     ): Generation {
         if (! $this->settings->acceptingGenerations()) {
             throw ValidationException::withMessages(['prompt' => 'Generating images is paused right now. Please try again later.']);
         }
 
+        if ($this->capacity->isPaused()) {
+            throw ValidationException::withMessages(['prompt' => $this->capacity->pausedMessage()]);
+        }
+
         $estimate = $this->estimateCost->handle($prompt, $size, $quality, $referenceImages);
         $hold = $estimate->maxPriceNano();
 
-        $generation = DB::transaction(function () use ($user, $prompt, $size, $quality, $referenceImages, $retryOf, $estimate, $hold): Generation {
+        $isNew = false;
+
+        $generation = DB::transaction(function () use ($user, $prompt, $size, $quality, $referenceImages, $retryOf, $submissionKey, $estimate, $hold, &$isNew): Generation {
             /** @var User $locked */
             $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+
+            $existing = $submissionKey === null ? null : $locked->generations()->where('submission_key', $submissionKey)->first();
+
+            if ($existing instanceof Generation) {
+                return $existing;
+            }
 
             if ($locked->balance_nano < $hold) {
                 throw ValidationException::withMessages([
@@ -60,6 +77,7 @@ final readonly class CreateGeneration
             $generation = Generation::query()->create([
                 'user_id' => $locked->id,
                 'retry_of_id' => $retryOf?->id,
+                'submission_key' => $submissionKey,
                 'status' => GenerationStatus::Pending,
                 'prompt' => $prompt,
                 'size' => $size,
@@ -74,10 +92,14 @@ final readonly class CreateGeneration
 
             $this->recordTransaction->handle($user, CreditTransactionType::Hold, -$hold, 'Held for a generation (maximum possible price)', $generation);
 
+            $isNew = true;
+
             return $generation;
         });
 
-        dispatch(new SubmitGenerationJob($generation));
+        if ($isNew) {
+            dispatch(new SubmitGenerationJob($generation));
+        }
 
         return $generation;
     }

@@ -28,6 +28,9 @@ final class GenerationResource extends JsonResource
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'is_final' => $this->status->isFinal(),
+            'was_retried' => $this->extra('retries_exists') === true || $this->extra('retries_exists') === 1,
+            'queue_position' => is_int($this->extra('queue_position')) ? $this->extra('queue_position') : null,
+            'waiting_reason' => is_string($this->extra('waiting_reason')) ? $this->extra('waiting_reason') : null,
             'prompt' => $this->prompt,
             'size' => $this->size->value,
             'quality' => $this->quality->value,
@@ -50,5 +53,13 @@ final class GenerationResource extends JsonResource
             'created_at' => $this->created_at->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Values loaded or computed for display only, such as withExists() counts and queue positions.
+     */
+    private function extra(string $key): mixed
+    {
+        return $this->getAttributes()[$key] ?? null;
     }
 }

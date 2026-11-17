@@ -39,6 +39,7 @@ const form = useForm({
     size: '1024x1024',
     quality: 'medium',
     reference_images: [] as string[],
+    submission_key: crypto.randomUUID(),
 });
 
 const estimate = useHttp<
@@ -85,8 +86,13 @@ const canAfford = computed(
         !credits.value ||
         credits.value.balance_nano >= cost.value.max_price_nano,
 );
+const pausedUntil = computed(() => page.props.capacity.paused_until);
 const canSubmit = computed(
-    () => form.prompt.trim() !== '' && canAfford.value && !form.processing,
+    () =>
+        form.prompt.trim() !== '' &&
+        canAfford.value &&
+        !form.processing &&
+        pausedUntil.value === null,
 );
 
 function addReferenceImage(): void {
@@ -109,7 +115,10 @@ function submit(): void {
         reference_images: filledReferenceImages.value,
     })).post(store.url(), {
         preserveScroll: true,
-        onSuccess: () => form.reset('prompt', 'reference_images'),
+        onSuccess: () => {
+            form.reset('prompt', 'reference_images');
+            form.submission_key = crypto.randomUUID();
+        },
     });
 }
 
@@ -143,6 +152,23 @@ useLiveGenerations(
                 submit, and pay only the actual cost once it's done. Failed
                 generations are free.
             </p>
+        </div>
+
+        <div
+            v-if="pausedUntil"
+            class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            data-test="capacity-banner"
+        >
+            <strong>Daily capacity reached.</strong>
+            Pixelforge's daily generation limit is used up for today. Generating
+            resumes at
+            {{
+                new Date(pausedUntil).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                })
+            }}
+            your time (00:00 UTC). Nothing was charged.
         </div>
 
         <form

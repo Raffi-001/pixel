@@ -60,6 +60,7 @@ it('creates a generation', function (): void {
             'size' => '1536x1024',
             'quality' => 'high',
             'reference_images' => [],
+            'submission_key' => '0b9c5c1e-6a41-4d0a-9d1f-3a1f6c3b2e10',
         ])
         ->assertRedirect(route('dashboard'))
         ->assertInertiaFlash('toast.message', 'Generation queued.');
@@ -79,12 +80,12 @@ it('validates the request', function (): void {
             'quality' => 'ultra',
             'reference_images' => ['ftp://example.com/a.png', 'https://a.test/1', 'https://a.test/2', 'https://a.test/3', 'https://a.test/4'],
         ])
-        ->assertSessionHasErrors(['prompt', 'size', 'quality', 'reference_images', 'reference_images.0']);
+        ->assertSessionHasErrors(['prompt', 'size', 'quality', 'reference_images', 'reference_images.0', 'submission_key']);
 });
 
 it('explains when the user cannot afford a generation', function (): void {
     $this->actingAs(User::factory()->create())
-        ->post(route('generations.store'), ['prompt' => 'A cat', 'size' => '1024x1024', 'quality' => 'low', 'reference_images' => []])
+        ->post(route('generations.store'), ['prompt' => 'A cat', 'size' => '1024x1024', 'quality' => 'low', 'reference_images' => [], 'submission_key' => '0b9c5c1e-6a41-4d0a-9d1f-3a1f6c3b2e11'])
         ->assertSessionHasErrors(['balance']);
 
     expect(Generation::query()->count())->toBe(0);

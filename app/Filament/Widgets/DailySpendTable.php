@@ -6,6 +6,7 @@ namespace App\Filament\Widgets;
 
 use App\Actions\BuildSpendReport;
 use App\Actions\FetchProviderUsage;
+use App\Filament\Pages\Reconciliation;
 use App\Services\Money;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -25,9 +26,10 @@ final class DailySpendTable extends TableWidget
     {
         return $table
             ->heading('Per day (UTC, by completion date)')
-            ->description("Provider cost is checked against Pixelforge's GET /v1/usage for this API key.")
+            ->description("Provider cost is checked against Pixelforge's GET /v1/usage for this API key. Click a day to compare it generation by generation.")
             ->records(fn (): array => $this->rows())
             ->paginated(false)
+            ->recordUrl(fn (array $record): string => Reconciliation::getUrl(['date' => $record['date']]))
             ->columns([
                 TextColumn::make('date'),
                 TextColumn::make('generations')->alignEnd(),

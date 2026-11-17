@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\CreateGeneration;
+use App\Actions\DescribeQueuePositions;
 use App\Enums\GenerationQuality;
 use App\Enums\GenerationSize;
 use App\Enums\GenerationStatus;
@@ -33,9 +34,10 @@ final readonly class GenerationController
         'failed' => ['label' => 'Failed', 'statuses' => [GenerationStatus::Failed]],
     ];
 
-    public function create(#[CurrentUser] User $user): Response
+    public function create(#[CurrentUser] User $user, DescribeQueuePositions $describeQueue): Response
     {
-        $recent = $user->generations()->latest()->limit(self::RECENT_LIMIT)->get();
+        $recent = $user->generations()->withExists('retries')->latest()->limit(self::RECENT_LIMIT)->get();
+        $describeQueue->handle($recent);
 
         return Inertia::render('generations/Create', [
             'generations' => GenerationResource::collection($recent),
@@ -45,16 +47,19 @@ final readonly class GenerationController
         ]);
     }
 
-    public function index(Request $request, #[CurrentUser] User $user): Response
+    public function index(Request $request, #[CurrentUser] User $user, DescribeQueuePositions $describeQueue): Response
     {
         $filter = $request->string('status')->value();
         $statuses = self::FILTERS[$filter]['statuses'] ?? null;
 
         $generations = $user->generations()
+            ->withExists('retries')
             ->when($statuses !== null, fn (Builder $query): Builder => $query->whereIn('status', $statuses ?? []))
             ->latest()
             ->paginate(24)
             ->withQueryString();
+
+        $describeQueue->handle($generations->getCollection());
 
         return Inertia::render('generations/Index', [
             'generations' => GenerationResource::collection($generations),
@@ -69,7 +74,7 @@ final readonly class GenerationController
 
     public function store(CreateGenerationRequest $request, #[CurrentUser] User $user, CreateGeneration $action): RedirectResponse
     {
-        $action->handle($user, $request->prompt(), $request->size(), $request->quality(), $request->referenceImages());
+        $action->handle($user, $request->prompt(), $request->size(), $request->quality(), $request->referenceImages(), submissionKey: $request->submissionKey());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Generation queued.')]);
 

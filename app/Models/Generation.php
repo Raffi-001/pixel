@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read string $id
  * @property-read string $user_id
  * @property-read string|null $retry_of_id
+ * @property-read string|null $submission_key
  * @property-read string|null $provider_id
  * @property-read GenerationStatus $status
  * @property-read string $prompt
@@ -64,6 +65,7 @@ final class Generation extends Model
             'id' => 'string',
             'user_id' => 'string',
             'retry_of_id' => 'string',
+            'submission_key' => 'string',
             'provider_id' => 'string',
             'status' => GenerationStatus::class,
             'prompt' => 'string',
@@ -100,6 +102,14 @@ final class Generation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return HasMany<Generation, $this>
+     */
+    public function retries(): HasMany
+    {
+        return $this->hasMany(self::class, 'retry_of_id');
     }
 
     /**

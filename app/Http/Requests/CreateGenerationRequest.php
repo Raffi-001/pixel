@@ -23,6 +23,7 @@ final class CreateGenerationRequest extends FormRequest
             'quality' => ['required', Rule::enum(GenerationQuality::class)],
             'reference_images' => ['present', 'array', 'max:4'],
             'reference_images.*' => ['required', 'string', 'url:http,https', 'max:2048'],
+            'submission_key' => [$this->isEstimate() ? 'nullable' : 'required', 'uuid'],
         ];
     }
 
@@ -61,6 +62,11 @@ final class CreateGenerationRequest extends FormRequest
         $urls = array_values($this->array('reference_images'));
 
         return $urls;
+    }
+
+    public function submissionKey(): ?string
+    {
+        return $this->filled('submission_key') ? $this->string('submission_key')->value() : null;
     }
 
     private function isEstimate(): bool

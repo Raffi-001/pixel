@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Starts a new generation with the same parameters as a failed one. We never retry on the user's behalf.
+ * Each failed generation can be retried once; retrying it again returns that same retry.
  */
 final readonly class RetryGeneration
 {
@@ -31,6 +32,7 @@ final readonly class RetryGeneration
             $generation->quality,
             $generation->reference_images,
             $generation,
+            'retry:'.$generation->id,
         );
     }
 }

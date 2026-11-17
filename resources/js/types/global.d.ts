@@ -21,6 +21,7 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             credits: Credits | null;
+            capacity: { paused_until: string | null };
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

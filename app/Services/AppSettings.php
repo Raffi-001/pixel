@@ -19,6 +19,9 @@ final class AppSettings
     /** @var list<int> */
     public const array DEFAULT_CREDIT_PACKS = [5, 10, 25];
 
+    /** Pixelforge runs 3 generations at once for the whole account; this keeps one user from taking all of them. */
+    public const int DEFAULT_MAX_IN_FLIGHT_PER_USER = 2;
+
     public function markupBps(): int
     {
         $value = $this->get('markup_bps');
@@ -45,6 +48,13 @@ final class AppSettings
         }
 
         return array_values(array_filter($value, is_int(...)));
+    }
+
+    public function maxInFlightPerUser(): int
+    {
+        $value = $this->get('max_in_flight_per_user');
+
+        return is_int($value) && $value > 0 ? $value : self::DEFAULT_MAX_IN_FLIGHT_PER_USER;
     }
 
     public function acceptingGenerations(): bool

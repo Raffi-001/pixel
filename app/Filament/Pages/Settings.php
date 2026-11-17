@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 use App\Actions\UpdateSettings;
 use App\Services\AppSettings;
 use App\Services\Money;
+use App\Services\PixelforgeCapacity;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TagsInput;
@@ -40,6 +41,7 @@ final class Settings extends Page
             'signup_bonus' => Money::toDecimal($settings->signupBonusNano()),
             'credit_packs' => array_map(strval(...), $settings->creditPacks()),
             'accepting_generations' => $settings->acceptingGenerations(),
+            'max_in_flight_per_user' => $settings->maxInFlightPerUser(),
         ]);
     }
 
@@ -76,6 +78,13 @@ final class Settings extends Page
                     ]),
                 Section::make('Operations')
                     ->schema([
+                        TextInput::make('max_in_flight_per_user')
+                            ->label('Generations running at once per user')
+                            ->helperText('Pixelforge runs 3 at a time for the whole app. Keeping this below 3 stops one user from blocking everyone else.')
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(3)
+                            ->required(),
                         Toggle::make('accepting_generations')
                             ->label('Accept new generations')
                             ->helperText('Turn off to pause new submissions, for example during a Pixelforge incident. Queued generations still finish.'),
@@ -99,7 +108,7 @@ final class Settings extends Page
 
     public function save(UpdateSettings $updateSettings): void
     {
-        /** @var array{markup_percent: numeric-string|int|float, signup_bonus: numeric-string|int|float, credit_packs: list<string>, accepting_generations: bool} $data */
+        /** @var array{markup_percent: numeric-string|int|float, signup_bonus: numeric-string|int|float, credit_packs: list<string>, accepting_generations: bool, max_in_flight_per_user: int|numeric-string} $data */
         $data = $this->form->getState();
 
         $updateSettings->handle(
@@ -107,8 +116,31 @@ final class Settings extends Page
             signupBonusNano: Money::fromDecimal((string) $data['signup_bonus']),
             creditPacks: array_map(intval(...), $data['credit_packs']),
             acceptingGenerations: $data['accepting_generations'],
+            maxInFlightPerUser: (int) $data['max_in_flight_per_user'],
         );
 
         Notification::make()->title('Settings saved')->success()->send();
+    }
+
+    /**
+     * @return array<Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('resumeGenerating')
+                ->label('Resume generating')
+                ->icon(Heroicon::OutlinedPlay)
+                ->color('warning')
+                ->visible(fn (PixelforgeCapacity $capacity): bool => $capacity->isPaused())
+                ->requiresConfirmation()
+                ->modalHeading('Resume before midnight UTC?')
+                ->modalDescription(fn (PixelforgeCapacity $capacity): string => 'Pixelforge reported its daily limit, so new generations are paused until '.$capacity->pausedUntil()?->format('H:i').' UTC. Resume only if you know the quota has been reset.')
+                ->action(function (PixelforgeCapacity $capacity): void {
+                    $capacity->resume();
+
+                    Notification::make()->title('Generating resumed')->success()->send();
+                }),
+        ];
     }
 }

@@ -9,6 +9,8 @@ use App\Actions\SubmitGeneration;
 use App\Enums\GenerationStatus;
 use App\Exceptions\PixelforgeException;
 use App\Models\Generation;
+use App\Services\AppSettings;
+use App\Services\PixelforgeCapacity;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -55,11 +57,17 @@ final class SubmitGenerationJob implements ShouldQueue
         return $this->generation->created_at->addMinutes(self::WAIT_MINUTES);
     }
 
-    public function handle(SubmitGeneration $submit): void
+    public function handle(SubmitGeneration $submit, AppSettings $settings, PixelforgeCapacity $capacity, FailGeneration $failGeneration): void
     {
         $generation = $this->generation->refresh();
 
         if ($generation->status !== GenerationStatus::Pending) {
+            return;
+        }
+
+        if ($capacity->isPaused()) {
+            $failGeneration->handle($generation, 'daily_limit_exceeded', $capacity->pausedMessage());
+
             return;
         }
 
@@ -68,6 +76,17 @@ final class SubmitGenerationJob implements ShouldQueue
             ->count();
 
         if ($inFlight >= self::MAX_IN_FLIGHT) {
+            $this->release(5);
+
+            return;
+        }
+
+        $userInFlight = Generation::query()
+            ->where('user_id', $generation->user_id)
+            ->whereIn('status', [GenerationStatus::Queued, GenerationStatus::Processing])
+            ->count();
+
+        if ($userInFlight >= $settings->maxInFlightPerUser()) {
             $this->release(5);
 
             return;
