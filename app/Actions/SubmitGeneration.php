@@ -9,6 +9,7 @@ use App\Exceptions\PixelforgeException;
 use App\Models\Generation;
 use App\Services\Pixelforge\PixelforgeClient;
 use App\Services\PixelforgeCapacity;
+use Illuminate\Support\Facades\Config;
 
 /**
  * Sends a waiting generation to Pixelforge. Our generation id doubles as the idempotency key,
@@ -38,7 +39,7 @@ final readonly class SubmitGeneration
                 'size' => $generation->size->value,
                 'quality' => $generation->quality->value,
                 'reference_images' => $generation->reference_images,
-                'metadata' => ['generation_id' => $generation->id, 'user_id' => $generation->user_id],
+                'metadata' => ['generation_id' => $generation->id, 'user_id' => $generation->user_id, 'app_url' => Config::string('app.url')],
             ], idempotencyKey: $generation->id);
         } catch (PixelforgeException $pixelforgeException) {
             throw_if($pixelforgeException->isTemporaryLimit() || $pixelforgeException->isConnectionFailure(), $pixelforgeException);

@@ -98,6 +98,8 @@ Pixelforge's limits apply to the whole account (3 generations in flight, 60 requ
   - our record is behind (with a Re-sync button);
   - recorded by us but not billed that day.
 
+  `GET /v1/generations` lists the whole Pixelforge account, not just this key, so each generation carries our `APP_URL` in its metadata. Generations sent by another environment are left out of the comparison and counted separately.
+
 ### Product
 
 - **Images** are Pixelforge's signed URLs, which expire after 24 hours. Expired ones show "Image link expired" (the brief allows this).

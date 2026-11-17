@@ -57,7 +57,7 @@ it('sends the generation with our id as idempotency key and metadata', function 
 
     Http::assertSent(fn (Request $request): bool => $request->hasHeader('Idempotency-Key', $generation->id)
         && $request->hasHeader('Authorization', 'Bearer pf_test_key')
-        && $request['metadata'] === ['generation_id' => $generation->id, 'user_id' => $generation->user_id]
+        && $request['metadata'] === ['generation_id' => $generation->id, 'user_id' => $generation->user_id, 'app_url' => config('app.url')]
         && ! array_key_exists('status', $request->data()));
 });
 

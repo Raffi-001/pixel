@@ -13,10 +13,14 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Config;
 
 /**
  * Explains the difference, if any, between what Pixelforge billed on one UTC day and what we recorded,
  * generation by generation. GET /v1/usage only gives daily totals; this pages through GET /v1/generations.
+ *
+ * That list covers the whole Pixelforge account, so it can include generations from other installs of this app
+ * (another environment or API key). Those are tagged with their own app_url in the metadata and left out.
  */
 final readonly class ReconcileProviderDay
 {
@@ -47,6 +51,8 @@ final readonly class ReconcileProviderDay
      *     pixelforge_cost_nano: int,
      *     our_cost_nano: int,
      *     matched: int,
+     *     other_environments: int,
+     *     other_environments_cost_nano: int,
      *     rows: list<array{provider_id: string, prompt: string, user: string|null, pixelforge_status: string, pixelforge_cost_nano: int|null, our_status: string|null, our_cost_nano: int|null, verdict: string, can_resync: bool}>
      * }
      */
@@ -56,16 +62,29 @@ final readonly class ReconcileProviderDay
         $remote = $this->remoteGenerations($day);
 
         if ($remote === null) {
-            return ['available' => false, 'complete' => false, 'pixelforge_cost_nano' => 0, 'our_cost_nano' => 0, 'matched' => 0, 'rows' => []];
+            return ['available' => false, 'complete' => false, 'pixelforge_cost_nano' => 0, 'our_cost_nano' => 0, 'matched' => 0, 'other_environments' => 0, 'other_environments_cost_nano' => 0, 'rows' => []];
         }
 
         $billed = [];
         $outOfDate = [];
+        $otherEnvironments = 0;
+        $otherEnvironmentsCost = 0;
+        $appUrl = Config::string('app.url');
 
         foreach ($remote['generations'] as $data) {
             $generation = PixelforgeGeneration::fromArray($data);
+            $billedToday = $generation->status === GenerationStatus::Succeeded && $generation->completedAt?->isSameDay($day);
 
-            if ($generation->status === GenerationStatus::Succeeded && $generation->completedAt?->isSameDay($day)) {
+            if (($generation->metadata['app_url'] ?? $appUrl) !== $appUrl) {
+                if ($billedToday) {
+                    $otherEnvironments++;
+                    $otherEnvironmentsCost += $this->cost($generation);
+                }
+
+                continue;
+            }
+
+            if ($billedToday) {
                 $billed[$generation->id] = $generation;
             } elseif ($generation->status->isFinal()) {
                 $outOfDate[$generation->id] = $generation;
@@ -90,7 +109,7 @@ final readonly class ReconcileProviderDay
         $pixelforgeCost = 0;
 
         foreach ($billed as $providerId => $generation) {
-            $cost = $this->calculateCost->handle($generation->usage ?? ['input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0], $generation->rates);
+            $cost = $this->cost($generation);
             $pixelforgeCost += $cost;
             $ours = $byProviderId->get($providerId) ?? $byId->get($generation->metadata['generation_id'] ?? '');
 
@@ -149,8 +168,15 @@ final readonly class ReconcileProviderDay
             'pixelforge_cost_nano' => $pixelforgeCost,
             'our_cost_nano' => $ourCost,
             'matched' => $matched,
+            'other_environments' => $otherEnvironments,
+            'other_environments_cost_nano' => $otherEnvironmentsCost,
             'rows' => $rows,
         ];
+    }
+
+    private function cost(PixelforgeGeneration $generation): int
+    {
+        return $this->calculateCost->handle($generation->usage ?? ['input_text_tokens' => 0, 'input_image_tokens' => 0, 'output_tokens' => 0, 'reasoning_tokens' => 0], $generation->rates);
     }
 
     /**

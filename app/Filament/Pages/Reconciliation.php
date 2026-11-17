@@ -52,12 +52,17 @@ final class Reconciliation extends Page implements HasTable
             Text::make(match (true) {
                 ! $report['available'] => 'Pixelforge could not be reached, so nothing could be compared.',
                 default => sprintf(
-                    'Pixelforge billed $%s on %s; we recorded $%s. %d generation(s) match exactly, %d need attention.%s',
+                    'Pixelforge billed $%s on %s; we recorded $%s. %d generation(s) match exactly, %d need attention.%s%s',
                     Money::toDecimal($report['pixelforge_cost_nano']),
                     $this->day()->toDateString(),
                     Money::toDecimal($report['our_cost_nano']),
                     $report['matched'],
                     count($report['rows']),
+                    $report['other_environments'] > 0 ? sprintf(
+                        ' %d generation(s) ($%s) from other environments on this Pixelforge account are left out.',
+                        $report['other_environments'],
+                        Money::toDecimal($report['other_environments_cost_nano']),
+                    ) : '',
                     $report['complete'] ? '' : ' Only the most recent generations were checked, so this day may be incomplete.',
                 ),
             }),
@@ -142,7 +147,7 @@ final class Reconciliation extends Page implements HasTable
     }
 
     /**
-     * @return array{available: bool, complete: bool, pixelforge_cost_nano: int, our_cost_nano: int, matched: int, rows: list<array{provider_id: string, prompt: string, user: string|null, pixelforge_status: string, pixelforge_cost_nano: int|null, our_status: string|null, our_cost_nano: int|null, verdict: string, can_resync: bool}>}
+     * @return array{available: bool, complete: bool, pixelforge_cost_nano: int, our_cost_nano: int, matched: int, other_environments: int, other_environments_cost_nano: int, rows: list<array{provider_id: string, prompt: string, user: string|null, pixelforge_status: string, pixelforge_cost_nano: int|null, our_status: string|null, our_cost_nano: int|null, verdict: string, can_resync: bool}>}
      */
     private function report(): array
     {

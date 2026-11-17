@@ -190,3 +190,27 @@ it('flags generations Pixelforge failed while we still show them running', funct
         ->verdict->toBe('out_of_date')
         ->pixelforge_cost_nano->toBeNull();
 });
+
+it('leaves out generations from other environments on the same Pixelforge account', function (): void {
+    $this->actingAs(User::factory()->admin()->create());
+    $ours = Generation::factory()->succeeded(62_810_000)->create(['provider_id' => 'gen_OURS', 'completed_at' => '2026-11-17 12:00:20']);
+    $elsewhere = Generation::factory()->make(['id' => 'elsewhere']);
+    fakePixelforge(['*/v1/generations*' => Http::response(['has_more' => false, 'data' => [
+        listed($ours, 'succeeded', ['metadata' => ['generation_id' => $ours->id, 'app_url' => config('app.url')]]),
+        listed($elsewhere, 'succeeded', ['id' => 'gen_LOCAL', 'metadata' => ['generation_id' => 'elsewhere', 'app_url' => 'http://localhost:8000/other']]),
+        listed($elsewhere, 'failed', ['id' => 'gen_LOCALFAILED', 'metadata' => ['generation_id' => 'elsewhere-2', 'app_url' => 'http://localhost:8000/other']]),
+    ]])]);
+
+    $report = resolve(ReconcileProviderDay::class)->handle(CarbonImmutable::parse('2026-11-17'));
+
+    expect($report)
+        ->matched->toBe(1)
+        ->rows->toBe([])
+        ->pixelforge_cost_nano->toBe(62_810_000)
+        ->other_environments->toBe(1)
+        ->other_environments_cost_nano->toBe(62_810_000);
+
+    Livewire::withQueryParams(['date' => '2026-11-17'])
+        ->test(Reconciliation::class)
+        ->assertSee('1 generation(s) ($0.062810000) from other environments on this Pixelforge account are left out.');
+});
